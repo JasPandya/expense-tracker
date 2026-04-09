@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spendwise-v1';
+const CACHE_NAME = 'spendwise-v2';
 const ASSETS = [
   './',
   './index.html',
