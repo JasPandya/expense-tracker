@@ -760,6 +760,74 @@ document.getElementById('modal-overlay').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeModal();
 });
 
+// ========== EXPORT / IMPORT ==========
+
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    expenses: state.expenses,
+    paymentMethods: state.paymentMethods,
+    settings: state.settings,
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `spendwise-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Data exported successfully!', 'success');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      if (!data.expenses || !Array.isArray(data.expenses)) {
+        showToast('Invalid backup file: missing expenses data.', 'error');
+        return;
+      }
+
+      // Merge strategy: add new items, skip duplicates by ID
+      let addedExpenses = 0;
+      let addedPayments = 0;
+
+      data.expenses.forEach(imp => {
+        if (!state.expenses.find(e => e.id === imp.id)) {
+          state.expenses.push(imp);
+          addedExpenses++;
+        }
+      });
+
+      if (data.paymentMethods && Array.isArray(data.paymentMethods)) {
+        data.paymentMethods.forEach(imp => {
+          if (!state.paymentMethods.find(p => p.id === imp.id)) {
+            state.paymentMethods.push(imp);
+            addedPayments++;
+          }
+        });
+      }
+
+      saveState();
+      showToast(`Imported ${addedExpenses} expense(s) and ${addedPayments} payment method(s).`, 'success');
+      navigateTo('dashboard');
+    } catch (err) {
+      showToast('Failed to read file. Make sure it is a valid SpendWise backup.', 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
 // ========== HTML ESCAPING ==========
 
 function escapeHtml(text) {
