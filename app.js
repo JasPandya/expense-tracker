@@ -3,6 +3,135 @@
    Application Logic
    ======================================== */
 
+// ========== PIN LOCK ==========
+
+const PIN_HASH_KEY = 'spendwise_pin_hash';
+const PIN_LENGTH = 4;
+let currentPin = '';
+let pinMode = 'unlock'; // 'setup', 'confirm', 'unlock'
+let setupPin = '';
+
+async function hashPin(pin) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + '_spendwise_salt');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function hasPinSet() {
+  return !!localStorage.getItem(PIN_HASH_KEY);
+}
+
+function initLockScreen() {
+  if (!hasPinSet()) {
+    pinMode = 'setup';
+    document.getElementById('lock-title').textContent = 'Set a PIN';
+    document.getElementById('lock-subtitle').textContent = 'Choose a 4-digit PIN to secure your data';
+  } else {
+    pinMode = 'unlock';
+    document.getElementById('lock-title').textContent = 'Enter PIN';
+    document.getElementById('lock-subtitle').textContent = 'Enter your PIN to unlock SpendWise';
+  }
+  currentPin = '';
+  updatePinDots();
+}
+
+function updatePinDots() {
+  const dots = document.querySelectorAll('#pin-dots .pin-dot');
+  dots.forEach((dot, i) => {
+    dot.className = 'pin-dot' + (i < currentPin.length ? ' filled' : '');
+  });
+}
+
+function pinKeyPress(digit) {
+  if (currentPin.length >= PIN_LENGTH) return;
+  currentPin += digit;
+  updatePinDots();
+  document.getElementById('lock-error').classList.add('hidden');
+
+  if (currentPin.length === PIN_LENGTH) {
+    setTimeout(() => handlePinComplete(), 150);
+  }
+}
+
+function pinBackspace() {
+  if (currentPin.length > 0) {
+    currentPin = currentPin.slice(0, -1);
+    updatePinDots();
+    document.getElementById('lock-error').classList.add('hidden');
+  }
+}
+
+async function handlePinComplete() {
+  if (pinMode === 'setup') {
+    setupPin = currentPin;
+    pinMode = 'confirm';
+    currentPin = '';
+    document.getElementById('lock-title').textContent = 'Confirm PIN';
+    document.getElementById('lock-subtitle').textContent = 'Re-enter your PIN to confirm';
+    updatePinDots();
+    return;
+  }
+
+  if (pinMode === 'confirm') {
+    if (currentPin === setupPin) {
+      const hash = await hashPin(currentPin);
+      localStorage.setItem(PIN_HASH_KEY, hash);
+      unlockApp();
+    } else {
+      showPinError('PINs do not match. Try again.');
+      pinMode = 'setup';
+      setupPin = '';
+      document.getElementById('lock-title').textContent = 'Set a PIN';
+      document.getElementById('lock-subtitle').textContent = 'Choose a 4-digit PIN to secure your data';
+    }
+    return;
+  }
+
+  if (pinMode === 'unlock') {
+    const hash = await hashPin(currentPin);
+    const stored = localStorage.getItem(PIN_HASH_KEY);
+    if (hash === stored) {
+      showPinSuccess();
+      setTimeout(unlockApp, 300);
+    } else {
+      showPinError('Incorrect PIN. Try again.');
+    }
+  }
+}
+
+function showPinError(msg) {
+  const dots = document.querySelectorAll('#pin-dots .pin-dot');
+  dots.forEach(d => d.className = 'pin-dot error');
+  document.getElementById('lock-error').textContent = msg;
+  document.getElementById('lock-error').classList.remove('hidden');
+  currentPin = '';
+  setTimeout(() => updatePinDots(), 500);
+}
+
+function showPinSuccess() {
+  const dots = document.querySelectorAll('#pin-dots .pin-dot');
+  dots.forEach(d => d.className = 'pin-dot success');
+}
+
+function unlockApp() {
+  document.getElementById('lock-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('app-hidden');
+  init();
+}
+
+// Keyboard support for PIN
+document.addEventListener('keydown', (e) => {
+  const lockScreen = document.getElementById('lock-screen');
+  if (lockScreen.classList.contains('hidden')) return;
+  if (e.key >= '0' && e.key <= '9') pinKeyPress(e.key);
+  if (e.key === 'Backspace') pinBackspace();
+});
+
+// Start lock screen
+initLockScreen();
+
 // ========== DATA & STATE ==========
 
 const CATEGORIES = {
@@ -843,4 +972,4 @@ function init() {
   navigateTo('dashboard');
 }
 
-init();
+// init() is called by unlockApp() after PIN verification
