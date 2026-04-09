@@ -211,13 +211,15 @@ function initTheme() {
   document.documentElement.setAttribute('data-theme', theme);
 }
 
-document.getElementById('themeToggle').addEventListener('click', () => {
+function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
   state.settings.theme = next;
   saveState();
-});
+}
+
+document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
 // ========== TOAST NOTIFICATIONS ==========
 
